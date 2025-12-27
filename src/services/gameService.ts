@@ -121,13 +121,18 @@ export class GameService {
     obstacleType?: string
   ): Promise<void> {
     const objectId = uuidv4();
-    const gameObject: GameObject = {
+    const gameObject: any = {
       id: objectId,
       type,
       x,
       y,
-      obstacleType: obstacleType as any,
     };
+    
+    // Only add obstacleType if it's provided
+    if (obstacleType) {
+      gameObject.obstacleType = obstacleType;
+    }
+    
     await set(
       ref(database, `games/${gameId}/gameObjects/${objectId}`),
       gameObject
