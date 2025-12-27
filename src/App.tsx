@@ -1,35 +1,62 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect } from "react";
+import { useAuthStore, useGameStore } from "./store/store";
+import { AuthService } from "./services/authService";
+import { AuthPage } from "./components/AuthPage";
+import { MainMenu } from "./components/MainMenu";
+import { GameRoom } from "./components/GameRoom";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const user = useAuthStore((state) => state.user);
+  const userLoading = useAuthStore((state) => state.userLoading);
+  const setUser = useAuthStore((state) => state.setUser);
+  const setUserLoading = useAuthStore((state) => state.setUserLoading);
+
+  const gameId = useGameStore((state) => state.gameId);
+  const setGameId = useGameStore((state) => state.setGameId);
+  const reset = useGameStore((state) => state.reset);
+
+  // Check auth state on mount
+  useEffect(() => {
+    const unsubscribe = AuthService.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+      setUserLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [setUser, setUserLoading]);
+
+  if (userLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner"></div>
+        <p>Block Buddies</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
+  if (gameId) {
+    return (
+      <GameRoom
+        gameId={gameId}
+        onLeave={() => {
+          reset();
+          setGameId(null);
+        }}
+      />
+    );
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <MainMenu
+      onCreateGame={(id) => setGameId(id)}
+      onJoinGame={(id) => setGameId(id)}
+    />
+  );
 }
 
-export default App
+export default App;

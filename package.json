@@ -1,17 +1,26 @@
 {
   "name": "block-buddies",
+  "description": "A real-time multiplayer 2D puzzle game with React, TypeScript, Vite, and Firebase",
+  "author": "Block Buddies Team",
+  "license": "MIT",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc -b"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "firebase": "^12.7.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.11.0",
+    "uuid": "^13.0.0",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
