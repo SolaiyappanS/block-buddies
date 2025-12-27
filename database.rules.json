@@ -9,10 +9,17 @@
     },
     "games": {
       ".read": "auth !== null",
+      ".write": "auth !== null",
       "$gameId": {
-        ".write": "root.child('games').child($gameId).child('createdBy').val() === auth.uid || !root.child('games').child($gameId).exists()",
+        ".read": "auth !== null",
+        ".write": "auth !== null",
         "players": {
-          ".read": "auth !== null"
+          ".read": "auth !== null",
+          ".write": "auth !== null"
+        },
+        "gameObjects": {
+          ".read": "auth !== null",
+          ".write": "auth !== null"
         },
         "gameState": {
           ".read": "auth !== null",
