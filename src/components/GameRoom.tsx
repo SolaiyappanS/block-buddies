@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { GameService, type GameState } from "../services/gameService";
-import { useAuthStore, useGameStore } from "../store/store";
+import { useGameStore } from "../store/store";
 import { GameCanvas } from "./GameCanvas";
 import "../styles/GameRoom.css";
 
@@ -10,7 +10,6 @@ interface GameRoomProps {
 }
 
 export function GameRoom({ gameId, onLeave }: GameRoomProps) {
-  const user = useAuthStore((state) => state.user);
   const gameState = useGameStore((state) => state.gameState);
   const setGameState = useGameStore((state) => state.setGameState);
   const [loading, setLoading] = useState(true);
