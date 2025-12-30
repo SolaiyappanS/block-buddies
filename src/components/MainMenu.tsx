@@ -25,8 +25,13 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
         user.email || "",
         1 // Always start with level 1
       );
-      onCreateGame(gameId);
+      console.log("Game created with ID:", gameId);
+      // Give Firebase a moment to sync before navigating
+      setTimeout(() => {
+        onCreateGame(gameId);
+      }, 500);
     } catch (err) {
+      console.error("Game creation error:", err);
       setError(err instanceof Error ? err.message : "Failed to create game");
       setLoading(false);
     }
@@ -41,8 +46,13 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
     setError("");
     try {
       await GameService.joinGame(gameCode, user.uid, user.email || "");
-      onJoinGame(gameCode);
+      console.log("Joined game:", gameCode);
+      // Give Firebase a moment to sync before navigating
+      setTimeout(() => {
+        onJoinGame(gameCode);
+      }, 500);
     } catch (err) {
+      console.error("Join game error:", err);
       setError(err instanceof Error ? err.message : "Failed to join game");
       setLoading(false);
     }

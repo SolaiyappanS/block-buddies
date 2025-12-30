@@ -402,11 +402,13 @@ export class GameService {
   // Listen to game state changes
   static listenToGameState(
     gameId: string,
-    callback: (gameState: GameState) => void
+    callback: (gameState: GameState | null) => void
   ) {
     return onValue(ref(database, `games/${gameId}`), (snapshot) => {
       if (snapshot.exists()) {
         callback(snapshot.val());
+      } else {
+        callback(null);
       }
     });
   }

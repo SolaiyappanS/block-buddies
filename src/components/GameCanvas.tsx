@@ -38,14 +38,16 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
     const unsubscribe = GameService.listenToGameState(
       gameId,
       (newGameState) => {
-        setGameState(newGameState);
-        setPlayers(newGameState.players);
-        setGameObjects(newGameState.gameObjects);
+        if (newGameState) {
+          setGameState(newGameState);
+          setPlayers(newGameState.players);
+          setGameObjects(newGameState.gameObjects);
 
-        if (user) {
-          const player = newGameState.players[user.uid];
-          if (player) {
-            setCurrentPlayer(player);
+          if (user) {
+            const player = newGameState.players[user.uid];
+            if (player) {
+              setCurrentPlayer(player);
+            }
           }
         }
       }

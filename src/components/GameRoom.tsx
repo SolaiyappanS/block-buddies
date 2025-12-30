@@ -18,7 +18,7 @@ export function GameRoom({ gameId, onLeave }: GameRoomProps) {
     // Listen to game state updates
     const unsubscribe = GameService.listenToGameState(
       gameId,
-      (state: GameState) => {
+      (state: GameState | null) => {
         setGameState(state);
         setLoading(false);
       }
