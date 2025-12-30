@@ -32,6 +32,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
   const [message, setMessage] = useState("");
   const [alert, setAlert] = useState<Alert | null>(null);
   const [allPlayersAtExit, setAllPlayersAtExit] = useState(false);
+  const [playersAtExit, setPlayersAtExit] = useState<Set<string>>(new Set());
 
   // Listen to game state changes
   useEffect(() => {
@@ -131,6 +132,8 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
       } else if (objectAtPos.type === "exit") {
         // Player reached exit
         await GameService.updatePlayerPosition(gameId, user.uid, newX, newY);
+        // Mark player as having reached exit
+        setPlayersAtExit(prev => new Set([...prev, user.uid]));
         checkAllPlayersAtExit();
         return;
       }
@@ -201,9 +204,10 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
 
     if (!exitObject) return;
 
-    const allAtExit = Object.values(players).every(
-      (player) => player.x === exitObject.x && player.y === exitObject.y
-    );
+    // Check all current players are in the playersAtExit set
+    const allPlayerIds = Object.keys(players);
+    const allAtExit = allPlayerIds.length > 0 && 
+                      allPlayerIds.every(id => playersAtExit.has(id));
 
     if (allAtExit) {
       setAllPlayersAtExit(true);
@@ -243,6 +247,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
         );
         // The game state will be updated via the listener
         setAllPlayersAtExit(false);
+        setPlayersAtExit(new Set()); // Reset players at exit for new level
         setMessage("");
       } catch (error) {
         console.error("Failed to load next level:", error);
@@ -261,6 +266,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
           user.email || "",
           levelNumber
         );
+        setPlayersAtExit(new Set()); // Reset players at exit when restarting
         setAlert(null);
       } catch (error) {
         console.error("Failed to reset level:", error);
@@ -278,6 +284,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
           user.email || "",
           1
         );
+        setPlayersAtExit(new Set()); // Reset players at exit when restarting
         setAlert(null);
       } catch (error) {
         console.error("Failed to restart:", error);
@@ -311,7 +318,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
           </span>
           <span>
             <i className="fas fa-gamepad"></i> Game Code:{" "}
-            {gameId.substring(0, 8).toUpperCase()}
+            {gameState?.gameCode || gameId.substring(0, 8).toUpperCase()}
           </span>
         </div>
       </div>
@@ -385,6 +392,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
                 width: `${PIXEL_SIZE}px`,
                 height: `${PIXEL_SIZE}px`,
                 backgroundColor: player.color,
+                display: playersAtExit.has(player.id) ? "none" : "flex",
               }}
               title={player.email}
             >

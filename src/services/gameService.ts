@@ -23,6 +23,7 @@ export interface GameObject {
 
 export interface GameState {
   id: string;
+  gameCode: string; // Short code for joining (first 8 chars of ID in uppercase)
   creatorUid: string;
   levelNumber: number;
   gridSize: number;
@@ -276,12 +277,13 @@ export class GameService {
 
     const gameState: GameState = {
       id: gameId,
+      gameCode: gameId.substring(0, 8).toUpperCase(),
       creatorUid,
       levelNumber,
       gridSize,
       players,
       gameObjects,
-      status: "active",
+      status: "waiting",
       createdAt: Date.now(),
     };
 
@@ -289,17 +291,36 @@ export class GameService {
     return gameId;
   }
 
-  // Join an existing game
+  // Join an existing game by game code or full ID
   static async joinGame(
-    gameId: string,
+    gameCodeOrId: string,
     playerUid: string,
     email: string
-  ): Promise<void> {
-    const gameRef = ref(database, `games/${gameId}`);
+  ): Promise<string> {
+    let actualGameId = gameCodeOrId;
+
+    // If it's a short code, find the actual game ID
+    if (gameCodeOrId.length === 8 || gameCodeOrId.length < 36) {
+      const gamesRef = ref(database, "games");
+      const snapshot = await get(gamesRef);
+      
+      if (!snapshot.exists()) throw new Error("Game not found");
+      
+      const games = snapshot.val();
+      const foundGame = Object.entries(games).find(([_, game]: [string, any]) => 
+        game.gameCode === gameCodeOrId.toUpperCase()
+      );
+
+      if (!foundGame) throw new Error("Game not found with code: " + gameCodeOrId);
+      actualGameId = foundGame[0];
+    }
+
+    const gameRef = ref(database, `games/${actualGameId}`);
     const snapshot = await get(gameRef);
     const game = snapshot.val();
 
     if (!game) throw new Error("Game not found");
+    if (game.status !== "waiting") throw new Error("Game has already started");
     if (Object.keys(game.players).length >= 6) throw new Error("Game is full");
 
     const level = this.getLevel(game.levelNumber);
@@ -320,7 +341,8 @@ export class GameService {
       color: PLAYER_COLORS[playerCount % PLAYER_COLORS.length],
     };
 
-    await update(ref(database, `games/${gameId}/players/${playerUid}`), player);
+    await update(ref(database, `games/${actualGameId}/players/${playerUid}`), player);
+    return actualGameId;
   }
 
   // Update player position
@@ -427,6 +449,11 @@ export class GameService {
     status: "waiting" | "active" | "completed"
   ): Promise<void> {
     await update(ref(database, `games/${gameId}`), { status });
+  }
+
+  // Start the game (change status from waiting to active)
+  static async startGame(gameId: string): Promise<void> {
+    await this.updateGameStatus(gameId, "active");
   }
 
   // Leave game

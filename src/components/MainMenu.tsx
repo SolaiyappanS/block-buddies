@@ -45,11 +45,12 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
     setLoading(true);
     setError("");
     try {
-      await GameService.joinGame(gameCode, user.uid, user.email || "");
-      console.log("Joined game:", gameCode);
+      const actualGameId = await GameService.joinGame(gameCode, user.uid, user.email || "");
+      console.log("Joined game:", actualGameId);
+      setGameCode(""); // Clear the input
       // Give Firebase a moment to sync before navigating
       setTimeout(() => {
-        onJoinGame(gameCode);
+        onJoinGame(actualGameId);
       }, 500);
     } catch (err) {
       console.error("Join game error:", err);
