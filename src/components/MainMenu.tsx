@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AuthService } from "../services/authService";
 import { GameService } from "../services/gameService";
 import { useAuthStore } from "../store/store";
@@ -11,34 +11,23 @@ interface MainMenuProps {
 
 export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
   const user = useAuthStore((state) => state.user);
-  const [lastLevel, setLastLevel] = useState(1);
   const [gameCode, setGameCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      AuthService.getUserProfile(user.uid).then((profile) => {
-        if (profile) {
-          setLastLevel(profile.lastLevel);
-        }
-      });
-    }
-  }, [user]);
-
   const handleCreateGame = async () => {
     if (!user) return;
     setLoading(true);
+    setError("");
     try {
       const gameId = await GameService.createGame(
         user.uid,
         user.email || "",
-        lastLevel
+        1 // Always start with level 1
       );
       onCreateGame(gameId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create game");
-    } finally {
       setLoading(false);
     }
   };
@@ -49,12 +38,12 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
       return;
     }
     setLoading(true);
+    setError("");
     try {
       await GameService.joinGame(gameCode, user.uid, user.email || "");
       onJoinGame(gameCode);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to join game");
-    } finally {
       setLoading(false);
     }
   };
@@ -79,7 +68,7 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
           <p>
             <i className="fas fa-user"></i> {user?.email}
           </p>
-          <p>Resume from Level {lastLevel}</p>
+          <p>Complete all 5 levels to win!</p>
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -87,6 +76,7 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
         <div className="menu-actions">
           <div className="action-group">
             <h3>Create New Game</h3>
+            <p className="action-description">Start a new game at Level 1. Other players can join using the game code.</p>
             <button
               onClick={handleCreateGame}
               disabled={loading}
@@ -98,6 +88,7 @@ export function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
 
           <div className="action-group">
             <h3>Join Existing Game</h3>
+            <p className="action-description">Join a game that another player has created.</p>
             <input
               type="text"
               placeholder="Enter game code"

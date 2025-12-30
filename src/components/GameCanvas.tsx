@@ -15,6 +15,11 @@ interface GameProps {
   onGameEnd: () => void;
 }
 
+interface Alert {
+  type: "error" | "success";
+  message: string;
+}
+
 export function GameCanvas({ gameId, onGameEnd }: GameProps) {
   const user = useAuthStore((state) => state.user);
   const gameState = useGameStore((state) => state.gameState);
@@ -25,6 +30,8 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
   );
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [message, setMessage] = useState("");
+  const [alert, setAlert] = useState<Alert | null>(null);
+  const [allPlayersAtExit, setAllPlayersAtExit] = useState(false);
 
   // Listen to game state changes
   useEffect(() => {
@@ -50,7 +57,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
   // Handle keyboard movement
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (!currentPlayer || !user) return;
+      if (!currentPlayer || !user || allPlayersAtExit) return;
 
       let newX = currentPlayer.x;
       let newY = currentPlayer.y;
@@ -80,37 +87,205 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
           return;
       }
 
-      // Check for collisions and interactions
-      const occupiedByPlayer = Object.values(players).some(
-        (p) => p.x === newX && p.y === newY
-      );
-
-      if (!occupiedByPlayer) {
-        GameService.updatePlayerPosition(gameId, user.uid, newX, newY);
-        checkLevelCompletion(newX, newY);
-      }
+      handleMove(newX, newY);
     };
 
     window.addEventListener("keydown", handleKeyPress);
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [currentPlayer, players, user, gameId]);
+  }, [currentPlayer, players, user, gameId, gameObjects, allPlayersAtExit]);
 
-  const checkLevelCompletion = (x: number, y: number) => {
-    const exitObject = Object.values(gameObjects).find(
-      (obj) => obj.type === "exit" && obj.x === x && obj.y === y
+  const handleMove = async (newX: number, newY: number) => {
+    if (!user) return;
+
+    // Check for collisions with players
+    const occupiedByPlayer = Object.values(players).some(
+      (p) => p.x === newX && p.y === newY
     );
 
-    if (exitObject) {
-      setMessage("🎉 Level Complete! Moving to next level...");
-      setTimeout(() => {
-        if (user) {
-          const nextLevel = (gameState?.levelNumber || 1) + 1;
-          GameService.updateGameLevel(gameId, nextLevel);
-          GameService.updatePlayerPosition(gameId, user.uid, 0, 0);
-          setMessage("");
-        }
-      }, 2000);
+    if (occupiedByPlayer) {
+      return;
     }
+
+    // Check for rocks and obstacles
+    const objectAtPos = Object.values(gameObjects).find(
+      (obj) => obj.x === newX && obj.y === newY
+    );
+
+    if (objectAtPos) {
+      if (objectAtPos.type === "rock") {
+        // Try to push the rock
+        await handleRockPush(newX, newY, objectAtPos.id);
+        return;
+      } else if (objectAtPos.type === "obstacle") {
+        // Hit an obstacle - restart level
+        showAlert(
+          "error",
+          `You hit an obstacle! Restarting level...`
+        );
+        setTimeout(() => {
+          resetLevel();
+        }, 2000);
+        return;
+      } else if (objectAtPos.type === "exit") {
+        // Player reached exit
+        await GameService.updatePlayerPosition(gameId, user.uid, newX, newY);
+        checkAllPlayersAtExit();
+        return;
+      }
+    }
+
+    // Normal movement
+    await GameService.updatePlayerPosition(gameId, user.uid, newX, newY);
+  };
+
+  const handleRockPush = async (
+    rockX: number,
+    rockY: number,
+    rockId: string
+  ) => {
+    if (!user || !currentPlayer) return;
+
+    // Calculate direction of push
+    const pushDirX = rockX - currentPlayer.x;
+    const pushDirY = rockY - currentPlayer.y;
+
+    const newRockX = rockX + pushDirX;
+    const newRockY = rockY + pushDirY;
+
+    // Check if new position is valid
+    if (newRockX < 0 || newRockX >= GRID_SIZE || newRockY < 0 || newRockY >= GRID_SIZE) {
+      return; // Can't push rock off the grid
+    }
+
+    // Check if there's an object at the new rock position
+    const objectAtNewPos = Object.values(gameObjects).find(
+      (obj) => obj.x === newRockX && obj.y === newRockY && obj.id !== rockId
+    );
+
+    if (objectAtNewPos) {
+      return; // Can't push rock into another object
+    }
+
+    // Check if there's an obstacle at the new position
+    const obstacleAtPos = Object.values(gameObjects).find(
+      (obj) =>
+        obj.type === "obstacle" &&
+        obj.x === newRockX &&
+        obj.y === newRockY
+    );
+
+    // Move rock and cover the obstacle if there's one
+    const rock = gameObjects[rockId];
+    if (rock && obstacleAtPos) {
+      // Rock is moving onto an obstacle - cover it
+      await GameService.moveGameObject(gameId, rockId, newRockX, newRockY);
+      // Update the obstacle to be hidden (covered by rock)
+      await GameService.updateGameObject(gameId, obstacleAtPos.id, {
+        covered: true,
+      });
+    } else if (rock) {
+      // Normal rock movement
+      await GameService.moveGameObject(gameId, rockId, newRockX, newRockY);
+    }
+
+    // Move player to where rock was
+    await GameService.updatePlayerPosition(gameId, user.uid, rockX, rockY);
+  };
+
+  const checkAllPlayersAtExit = () => {
+    const exitObject = Object.values(gameObjects).find(
+      (obj) => obj.type === "exit"
+    );
+
+    if (!exitObject) return;
+
+    const allAtExit = Object.values(players).every(
+      (player) => player.x === exitObject.x && player.y === exitObject.y
+    );
+
+    if (allAtExit) {
+      setAllPlayersAtExit(true);
+      const nextLevel = (gameState?.levelNumber || 1) + 1;
+      const totalLevels = GameService.getTotalLevels();
+
+      if (nextLevel > totalLevels) {
+        setMessage("🎉 You completed all levels! Congratulations!");
+      } else {
+        setMessage(`🎉 Level Complete! Moving to Level ${nextLevel}...`);
+        setTimeout(() => {
+          loadNextLevel(nextLevel);
+        }, 3000);
+      }
+    }
+  };
+
+  const loadNextLevel = async (levelNumber: number) => {
+    const totalLevels = GameService.getTotalLevels();
+    if (levelNumber > totalLevels) {
+      // Game completed
+      setMessage("🎉 You completed all levels!");
+      setTimeout(() => {
+        onGameEnd();
+      }, 2000);
+      return;
+    }
+
+    // Delete current game and create new one at next level
+    if (user) {
+      try {
+        await GameService.deleteGame(gameId);
+        await GameService.createGame(
+          user.uid,
+          user.email || "",
+          levelNumber
+        );
+        // The game state will be updated via the listener
+        setAllPlayersAtExit(false);
+        setMessage("");
+      } catch (error) {
+        console.error("Failed to load next level:", error);
+        showAlert("error", "Failed to load next level");
+      }
+    }
+  };
+
+  const resetLevel = async () => {
+    if (user) {
+      try {
+        await GameService.deleteGame(gameId);
+        const levelNumber = gameState?.levelNumber || 1;
+        await GameService.createGame(
+          user.uid,
+          user.email || "",
+          levelNumber
+        );
+        setAlert(null);
+      } catch (error) {
+        console.error("Failed to reset level:", error);
+        showAlert("error", "Failed to reset level");
+      }
+    }
+  };
+
+  const restartFromFirstLevel = async () => {
+    if (user) {
+      try {
+        await GameService.deleteGame(gameId);
+        await GameService.createGame(
+          user.uid,
+          user.email || "",
+          1
+        );
+        setAlert(null);
+      } catch (error) {
+        console.error("Failed to restart:", error);
+        showAlert("error", "Failed to restart game");
+      }
+    }
+  };
+
+  const showAlert = (type: "error" | "success", message: string) => {
+    setAlert({ type, message });
   };
 
   const handleLeaveGame = () => {
@@ -126,7 +301,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
   return (
     <div className="game-container">
       <div className="game-header">
-        <h2>Level {gameState?.levelNumber || 1}</h2>
+        <h2>Level {gameState?.levelNumber || 1} / {GameService.getTotalLevels()}</h2>
         <div className="game-info">
           <span>
             <i className="fas fa-users"></i> Players:{" "}
@@ -140,6 +315,20 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
       </div>
 
       {message && <div className="game-message">{message}</div>}
+
+      {alert && (
+        <div className={`alert alert-${alert.type}`}>
+          <p>{alert.message}</p>
+          <div className="alert-buttons">
+            <button onClick={resetLevel} className="btn-primary">
+              Restart Level
+            </button>
+            <button onClick={restartFromFirstLevel} className="btn-secondary">
+              Start From Level 1
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="game-canvas-wrapper">
         <div
@@ -162,6 +351,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
                 top: `${obj.y * PIXEL_SIZE}px`,
                 width: `${PIXEL_SIZE}px`,
                 height: `${PIXEL_SIZE}px`,
+                display: (obj as any).covered ? "none" : "flex",
               }}
             >
               {obj.type === "rock" && <i className="fas fa-cube"></i>}
@@ -206,7 +396,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
 
       <div className="game-controls">
         <p className="controls-text">
-          <i className="fas fa-arrow-keys"></i> Use Arrow Keys or WASD to move
+          <i className="fas fa-arrow-keys"></i> Use Arrow Keys or WASD to move • Push rocks to solve puzzles
         </p>
         <button onClick={handleLeaveGame} className="btn-leave">
           <i className="fas fa-sign-out-alt"></i> Leave Game
