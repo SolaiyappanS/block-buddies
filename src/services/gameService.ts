@@ -127,12 +127,12 @@ export class GameService {
       x,
       y,
     };
-    
+
     // Only add obstacleType if it's provided
     if (obstacleType) {
       gameObject.obstacleType = obstacleType;
     }
-    
+
     await set(
       ref(database, `games/${gameId}/gameObjects/${objectId}`),
       gameObject
