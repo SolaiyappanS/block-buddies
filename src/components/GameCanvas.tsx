@@ -41,13 +41,38 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
       (newGameState) => {
         if (newGameState) {
           setGameState(newGameState);
-          setPlayers(newGameState.players);
-          setGameObjects(newGameState.gameObjects);
+          // Handle case where players object might be null/undefined
+          const playersObj = newGameState.players || {};
+          setPlayers(playersObj);
+          setGameObjects(newGameState.gameObjects || {});
 
           if (user) {
-            const player = newGameState.players[user.uid];
+            const player = playersObj[user.uid];
             if (player) {
               setCurrentPlayer(player);
+            } else if (playersAtExit.has(user.uid)) {
+              // Player has exited, clear current player
+              setCurrentPlayer(null);
+            }
+          }
+        } else {
+          // Game was deleted (all players exited)
+          setGameState(null);
+          setPlayers({});
+          setGameObjects({});
+          setCurrentPlayer(null);
+          // Trigger level completion flow
+          if (allPlayersAtExit) {
+            const nextLevel = (gameState?.levelNumber || 1) + 1;
+            const totalLevels = GameService.getTotalLevels();
+
+            if (nextLevel > totalLevels) {
+              setMessage("🎉 You completed all levels! Congratulations!");
+            } else {
+              setMessage(`🎉 Level Complete! Moving to Level ${nextLevel}...`);
+              setTimeout(() => {
+                loadNextLevel(nextLevel);
+              }, 3000);
             }
           }
         }
@@ -55,7 +80,7 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
     );
 
     return () => unsubscribe();
-  }, [gameId, user, setGameState]);
+  }, [gameId, user, setGameState, allPlayersAtExit, gameState?.levelNumber]);
 
   // Handle keyboard movement
   useEffect(() => {
