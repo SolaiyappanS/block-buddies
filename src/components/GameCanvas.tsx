@@ -100,9 +100,9 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
   const handleMove = async (newX: number, newY: number) => {
     if (!user) return;
 
-    // Check for collisions with players
+    // Check for collisions with players (ignore players who have reached exit)
     const occupiedByPlayer = Object.values(players).some(
-      (p) => p.x === newX && p.y === newY
+      (p) => p.x === newX && p.y === newY && !playersAtExit.has(p.id)
     );
 
     if (occupiedByPlayer) {
@@ -130,11 +130,29 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
         }, 2000);
         return;
       } else if (objectAtPos.type === "exit") {
-        // Player reached exit
-        await GameService.updatePlayerPosition(gameId, user.uid, newX, newY);
-        // Mark player as having reached exit
-        setPlayersAtExit(prev => new Set([...prev, user.uid]));
-        checkAllPlayersAtExit();
+        // Player reached exit - remove them from the game
+        await GameService.leaveGame(gameId, user.uid);
+        // Mark player as having reached exit locally
+        const updatedExitSet = new Set([...playersAtExit, user.uid]);
+        setPlayersAtExit(updatedExitSet);
+        // Check if all players have exited
+        const allPlayerIds = Object.keys(players);
+        const allAtExit = allPlayerIds.length > 0 && 
+                          allPlayerIds.every(id => updatedExitSet.has(id));
+        if (allAtExit) {
+          setAllPlayersAtExit(true);
+          const nextLevel = (gameState?.levelNumber || 1) + 1;
+          const totalLevels = GameService.getTotalLevels();
+
+          if (nextLevel > totalLevels) {
+            setMessage("🎉 You completed all levels! Congratulations!");
+          } else {
+            setMessage(`🎉 Level Complete! Moving to Level ${nextLevel}...`);
+            setTimeout(() => {
+              loadNextLevel(nextLevel);
+            }, 3000);
+          }
+        }
         return;
       }
     }
@@ -195,34 +213,6 @@ export function GameCanvas({ gameId, onGameEnd }: GameProps) {
 
     // Move player to where rock was
     await GameService.updatePlayerPosition(gameId, user.uid, rockX, rockY);
-  };
-
-  const checkAllPlayersAtExit = () => {
-    const exitObject = Object.values(gameObjects).find(
-      (obj) => obj.type === "exit"
-    );
-
-    if (!exitObject) return;
-
-    // Check all current players are in the playersAtExit set
-    const allPlayerIds = Object.keys(players);
-    const allAtExit = allPlayerIds.length > 0 && 
-                      allPlayerIds.every(id => playersAtExit.has(id));
-
-    if (allAtExit) {
-      setAllPlayersAtExit(true);
-      const nextLevel = (gameState?.levelNumber || 1) + 1;
-      const totalLevels = GameService.getTotalLevels();
-
-      if (nextLevel > totalLevels) {
-        setMessage("🎉 You completed all levels! Congratulations!");
-      } else {
-        setMessage(`🎉 Level Complete! Moving to Level ${nextLevel}...`);
-        setTimeout(() => {
-          loadNextLevel(nextLevel);
-        }, 3000);
-      }
-    }
   };
 
   const loadNextLevel = async (levelNumber: number) => {
